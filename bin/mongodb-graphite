@@ -50,7 +50,7 @@ puts @conn["config"]["shards"].find().each { |shard|
   connHost = Mongo::Connection.new(host, port)
   connHost["admin"].command({ "isMaster" => 1 } )["hosts"].each { |slave|
     host, port = slave.split(':')
-    headers, values = `mongostat -n 1 --host #{host} --port #{port}   `.split("\n")[1..2].map {|line| line.gsub(' %','%').gsub('*','').gsub('idx miss','idxmiss').split }
+    headers, values = `mongostat -n 1 --host #{host} --port #{port}   `.split("\n")[1..2].map {|line| line.gsub(' %','').gsub('*','').gsub('idx miss','idxmiss').split }
     prefix = prefix_common + host +"."+port+"."
     headers = headers.map { |key| prefix+key }
     metrics = Hash[headers.zip(values)]
