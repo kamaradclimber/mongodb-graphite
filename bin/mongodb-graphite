@@ -3,7 +3,7 @@
 require 'mongo'
 require 'graphite'
 
-graphite_server = ARGV[1]
+graphite_server = ARGV[0]
 
 g = Graphite::Logger.new(graphite_server)
 
@@ -18,10 +18,12 @@ def convert(s)
       1
     when "k"
       1024
-    when "g"
+    when "m"
       1024 * 1024
+    when "g"
+      1024 * 1024 *1024
     when "t"
-      1024 * 1024 * 1024
+      1024 * 1024 * 1024 *1024
     else 
       raise "not convertible"
     end
