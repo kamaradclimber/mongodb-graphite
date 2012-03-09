@@ -46,7 +46,8 @@ def treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_
   connHost = Mongo::Connection.new(host, port)
   slaves = Array.new
   connHost["admin"].command({ "isMaster" => 1 } )["hosts"].each { |slave| slaves << slave}
-  slaves.peach { |slave|
+  slaves.each { |slave|
+    Process.fork do
     host, port = slave.split(':')
     timestamp =  Time.now.getutc.to_i
     result= `mongostat -n 60 --host #{host} --port #{port}   `.split("\n")
@@ -56,7 +57,7 @@ def treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_
     headers = headers.gsub(' %','').gsub('*','').gsub('idx miss','idxmiss').split
     values= values.delete_if {|line| line.start_with?('insert')}.map { |line| line.gsub('*','').split}
     values = values.transpose
-    
+
     prefix = prefix_common + host +"."+port+"."
     headers = headers.map { |key| prefix+key }
     metrics = Hash[headers.zip(values)]
@@ -65,23 +66,27 @@ def treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_
     output_average.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0.0) {|sum,el| sum+(el.to_i) } / metrics[prefix+key].size }
     output_sum.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0) {|sum,el| sum+(el.to_i)} }
     g.log(timestamp, metrics)
+    end
   }
 end
 
-host='localhost'
-port=27017
-@conn = Mongo::Connection.new(host,port)
+hostt='localhost'
+portt=27017
+@conn = Mongo::Connection.new(hostt,portt)
 @isdbgrid  = {"isdbgrid" => 1}
-begin 
+begin
   @conn["admin"].command(@isdbgrid)["ok"] == 1
   puts "mongos"
   shards = Array.new
   puts @conn["config"]["shards"].find().each { |shard|  shards << shard["host"] }
-  shards.peach { |s|
+  shards.each { |s|
+    Process.fork do
     host,port =  s.split(/,|\//)[1].split(':')
     treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
+    end
   }
-rescue 
+rescue
   puts "not mongos"
-  treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
+  treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,hostt,portt)
 end
+Process.wait
