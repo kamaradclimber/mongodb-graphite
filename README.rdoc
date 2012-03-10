@@ -1,0 +1,103 @@
+= mongodb-graphite 
+
+A Ruby client to retrieve statistics from a MongoDB cluster and push them to either Graphite or Statsd.
+
+= Usage
+
+ Usage: mongodb-graphite {SERVER_NAME} {PORT} [options]
+ 
+ SERVER_NAME = Target server for data collection. Optional if collector is set to none.
+ PORT        = Port for target server for data collection. Defaults to 2003 for Graphite and 8125 for statsd.
+ 
+ Options:
+     -c, --collector COLLECTOR        Stats collection type. One of graphite, statsd, none.
+                                      Defaults to none. 'None' simply primpts to stdout.
+         --host MONGOS                Hostname for mongos instance. Defaults to localhost.
+     -p, --port PORT                  Port number for mongos instance. Defaults to 27017.
+ 
+ Metric Path Options:
+         --host-trim VALUE            Value to trim from the end of the hostname.
+                                      May be specified multiple times.
+         --prefix PREFIX              Prefix to prepend to all metric paths.
+         --suffix SUFFIX              Suffix to append to all metric paths.
+         --host-prefix PREFIX         Prefix to prepend before the host name in metric paths.
+                                      Has no impact if the hostname is excluded.
+         --host-suffix SUFFIX         Suffix to append after the host name in metric paths.
+                                      Has no impact if the hostname is excluded.
+         --[no]reverse-hostname       Enables/Disables reversing the hostname when creating the
+                                      metric path. Defaults to reversing the hostname.
+         --exclude-hostname           Exclude the hostname entirely when creating the metric path.
+ 
+ Common options:
+         --help                       Show this message
+
+== Metric Paths
+
+By default, mongodb-graphite takes the hostname, reverses it and appends the name of the metric from MongoDB. For example, the the default metric path for <em>opcounters.command</em> from <em>mongo1.example.com</em> looks like the following:
+
+  com.example.mongo1.opcounters.command
+
+=== Hostname
+
+If you want to remove the domain portion of the hostname, you can use the <tt>--host-trim</tt> option:
+
+  $ ./mongodb-graphite --host-trim example.com
+ 
+Produces:
+
+  mongo1.opcounters.command
+  
+You can specify <tt>--host-trim</tt> multiple times if you have multiple paths you want to remove. All <tt>--host-trim</tt> options will be applied in the order in which they are specified. 
+
+Use the <tt>--no-reverse</tt> option to prevent mongodb-graphite from reversing the hostname when creating the metric path:
+
+  $ ./mongodb-graphite --no-reverse
+  mongo1.example.com.opcounters.command
+
+You can also exclude the hostname entirely by using the <tt>--exclude-hostname</tt>:
+
+  $ ./mongodb-graphite --exclude-hostname
+  opcounters.command
+  
+  $ ./mongodb-graphite --prefix mongo --exclude-hostname
+  mongo.opcounters.command
+
+Note that the <tt>--host-prefix</tt> and <tt>--host-suffix</td> options will be ignored if <tt>--exclude-hostname</tt> is specified.
+
+=== Prefixes/Suffixes
+
+You can add arbitrary prefixes and suffixes using the <tt>--prefix</tt> and <tt>--suffix</tt>. Prefixes are added before anything else in the metric path. Suffixes are added after anything else in the metric path:
+
+  $ ./mongodb-graphite --prefix foo
+  foo.com.example.mongo1.opcounters.command
+  
+  $ ./mongodb-graphite --prefix foo.bar
+  foo.bar.com.example.mongo1.opcounters.command
+  
+  $ ./mongodb-graphite --suffix foo
+  com.example.com.mongo1.opcounters.command.foo
+  
+  $ ./mongodb-graphite --suffix foo.bar
+  com.example.mongo1.opcounters.command.foo.bar
+  
+  $ ./mongodb-graphite --prefix production --suffix mongo
+  production.com.example.mongo1.opcounters.command.mongo
+
+You can add arbitrary prefixes and suffixes around the hostname itself using the <tt>--host-prefix</tt> and <tt>--host-suffix</tt> options. A <tt>host-prefix</tt> is added after any general prefix, but before the hostname. A <tt>host-suffix</tt> is added after the hostname, but before any the metric name itself. If used without <tt>--prefix</tt>, <tt>host-prefix</tt> has the same effect as a general prefix. They become more useful when combined with a general prefix/suffix:
+
+  $ ./mongodb-graphite --host-prefix foo
+  foo.com.example.mongo1.opcounters.command
+  
+  $ ./mongodb-graphite --host-suffix foo
+  com.example.mongo1.foo.opcounters.command
+  
+  $ ./mongodb-graphite --prefix prod --host-prefix mongo --host-suffix mongodb
+  prod.mongo.com.example.mongo1.mongodb.opcounters.command
+  prod.mongo.com.example.mongo2.mongodb.opcounters.command
+
+= Links
+
+* http://www.mongodb.org
+* http://graphite.wikidot.com
+* https://github.com/etsy/statsd
+* https://github.com/github/statsd-ruby

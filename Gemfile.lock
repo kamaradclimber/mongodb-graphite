@@ -1,9 +1,10 @@
 PATH
   remote: .
   specs:
-    mongodb-graphite (0.1.0.alpha)
+    mongodb-graphite (0.2.0)
       graphite (>= 0.2.0)
-      mongo (>= 1.5.2)
+      mongo (>= 1.6.0)
+      statsd-ruby (>= 0.3.0)
 
 GEM
   remote: http://rubygems.org/
@@ -13,7 +14,7 @@ GEM
     graphite (0.2.0)
       eventmachine
       rufus-scheduler
-    mongo (1.5.2)
+    mongo (1.6.0)
       bson (= 1.5.2)
     rufus-scheduler (2.0.16)
       tzinfo (>= 0.3.23)

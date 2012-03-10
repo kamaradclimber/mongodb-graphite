@@ -3,7 +3,7 @@ $:.push File.expand_path("../lib", __FILE__)
 
 Gem::Specification.new do |s|
   s.name        = "mongodb-graphite"
-  s.version     = '0.1.4'
+  s.version     = '0.2.1'
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Grégoire Seux"]
   s.email       = ["g.seux@criteo.com"]
@@ -15,7 +15,8 @@ Gem::Specification.new do |s|
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   #s.require_paths = ["lib"]
   
-  s.add_dependency "mongo", ">= 1.5.2"
+  s.add_dependency "mongo", ">= 1.6.0"
   s.add_dependency "graphite", ">= 0.2.0"
   s.add_dependency "peach", ">= 0.4"
+  s.add_dependency "statsd-ruby", ">= 0.3.0"
 end

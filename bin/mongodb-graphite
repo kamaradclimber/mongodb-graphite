@@ -1,92 +1,285 @@
 #!/usr/bin/env ruby
 
+require 'rubygems'
 require 'mongo'
 require 'graphite'
+require 'statsd'
 require 'peach'
 
-graphite_server = ARGV[0]
+require 'optparse'
+require 'ostruct'
 
-g = Graphite::Logger.new(graphite_server)
+COLLECTORS = %w{graphite statsd none}
 
-to_ignore =[ "set", "repl", "time","qr|qw","ar|aw","conn"]
-to_convert = ["mapped","vsize","res","netIn","netOut"]
-output_average = ["mapped","vsize","res","locked","idxmiss"]
-output_sum = ["netIn", "netOut","insert","query","update","delete","getmore","command","flushes","faults"]
-prefix_common = "criteo.mongodb."
+class InitOptions
+  def initialize
+    @opts = OptionParser.new do |opts|
+      opts.banner = "Usage: mongodb-graphite {SERVER_NAME} {PORT} [options]"
+      opts.separator ""
+      opts.separator "SERVER_NAME = Target server for data collection. Optional if collector is set to none."
+      opts.separator "PORT        = Port for target server for data collection. Defaults to 2003 for Graphite and 8125 for statsd."
+      opts.separator ""
+      opts.separator "Options:"
+      
+      opts.on("-c", "--collector COLLECTOR", COLLECTORS, "Stats collection type. One of #{COLLECTORS.join(', ')}.",
+      																					        "Defaults to none. 'None' simply primpts to stdout.") do |collector|
+				@options.collector = collector
+			end
+			
+			opts.on("-h", "--host MONGOS", "Hostname for mongos instance. Defaults to localhost.") do |host|
+				@options.host = host
+			end
+      
+			opts.on("-p", "--port PORT", Integer, "Port number for mongos instance. Defaults to 27017.") do |port|
+				@options.port = port
+			end
+      
+      opts.separator ""
+      opts.separator "Metric Path Options:"
+      
+      opts.on("--host-trim VALUE", "Value to trim from the end of the hostname.",
+      																		 "May be specified multiple times.") do |host_trim|
+				@options.host_trim << host_trim
+			end
+      
+      opts.on("--prefix PREFIX", "Prefix to prepend to all metric paths.") do |prefix|
+      	@options.prefix = prefix
+      end
 
-def convert(s)
-  mul = case s[-1] 
-    when "b"
-      1
-    when "k"
-      1024
-    when "m"
-      1024 * 1024
-    when "g"
-      1024 * 1024 *1024
-    when "t"
-      1024 * 1024 * 1024 *1024
-    else 
-      raise "not convertible"
+      opts.on("--suffix SUFFIX", "Suffix to append to all metric paths.") do |suffix|
+      	@options.suffix = suffix
+      end
+      
+      opts.on("--host-prefix PREFIX", "Prefix to prepend before the host name in metric paths.",
+                                      "Has no impact if the hostname is excluded.") do |prefix|
+        @options.host_prefix = prefix
+      end
+
+      opts.on("--host-suffix SUFFIX", "Suffix to append after the host name in metric paths.",
+                                      "Has no impact if the hostname is excluded.") do |suffix|
+        @options.host_suffix = suffix
+      end
+      
+      opts.on("--[no-]reverse", "Enables/Disables reversing the hostname when creating the",
+      								 					"metric path. Defaults to reversing the hostname.") do |reverse|
+				@options.reverse = reverse
+			end
+			
+			opts.on("--exclude-hostname", "Exclude the hostname entirely when creating the metric path.") do |exclude|
+				@options.exclude_hostname = exclude
+			end
+
+      opts.separator ""
+      opts.separator "Common options:"
+
+      # No argument, shows at tail.  This will print an options summary.
+      # Try it and see!
+      opts.on_tail("-h", "--help", "Show this message") do
+        puts opts
+        exit
+      end
     end
-  s[0..-1].to_f * mul
+  end
+
+  def parse(args)
+    @options = OpenStruct.new
+    @options.collector = "none"
+    @options.host = "localhost"
+    @options.port = 27017
+    
+    @options.prefix = ""
+    @options.suffix = ""
+    @options.host_prefix = ""
+    @options.host_suffix = ""
+    @options.host_trim = []
+    @options.reverse = true
+    @options.exclude_hostname = false
+
+    @opts.parse!(args)
+    @options
+  end
+
+  def help
+    puts @opts
+  end
 end
 
+option_parser = InitOptions.new
+options = option_parser.parse(ARGV)
 
+server_url = ARGV[0]
+server_port = nil
+if ARGV.length > 1
+  server_port = ARGV[1].to_i
+else
+  server_port = case options.collector
+    when "graphite" then 2003
+    else 8125
+  end
+end
 
+##############################
+# Check minimum params
+if server_url.nil? && ! options.collector == "none"
+	option_parser.help()
+  exit
+end
 
+##############################
+# Setup connections for collectors
+graphite_logger = nil
+if options.collector == "graphite"
+	graphite_logger = Graphite::Logger.new("#{server_url}:#{server_port}")
+end
 
+statsd = nil
+if options.collector == "statsd"
+  statsd = Statsd.new(server_url, server_port)
+end
 
+def treat_replicaset(shard_name, g, host, port)
+  shard_nodes = []
+  shard_host = nil
+  begin
+    # Open connection to shard
+    shard_host = Mongo::Connection.new(host, port)
+    
+    # Retrieve list of servers excluding arbiters
+    shard_nodes = shard_host["admin"].command({ "isMaster" => 1 } )["hosts"]
+  ensure
+    shard_host.close unless shard_host.nil?
+  end
+    
+  # Iterate over nodes and retrieve server status
+  shard_nodes.peach do |shard_node|
+    node_host, node_port = shard_node.split(':')
+    puts "#{shard_name}/#{node_host}: retrieving stats"
 
-
-
-
-def treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
-  #puts "shard : ", host,port
-  connHost = Mongo::Connection.new(host, port)
-  slaves = Array.new
-  connHost["admin"].command({ "isMaster" => 1 } )["hosts"].each { |slave| slaves << slave}
-  slaves.each { |slave|
-    Process.fork do
-    host, port = slave.split(':')
     timestamp =  Time.now.getutc.to_i
-    result= `mongostat -n 60 --host #{host} --port #{port}   `.split("\n")
-    #timestamp +=  Time.now.getutc.to_i
-    #timestamp /= 2
-    headers, values = result[1], result[2..-1]
-    headers = headers.gsub(' %','').gsub('*','').gsub('idx miss','idxmiss').split
-    values= values.delete_if {|line| line.start_with?('insert')}.map { |line| line.gsub('*','').split}
-    values = values.transpose
-
-    prefix = prefix_common + host +"."+port+"."
-    headers = headers.map { |key| prefix+key }
-    metrics = Hash[headers.zip(values)]
-    to_ignore.each { |key| metrics.delete(prefix + key) }
-    to_convert.each { |key| metrics[prefix + key] = metrics[prefix+key].map {|val| convert(val)}}
-    output_average.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0.0) {|sum,el| sum+(el.to_i) } / metrics[prefix+key].size }
-    output_sum.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0) {|sum,el| sum+(el.to_i)} }
-    g.log(timestamp, metrics)
+    
+    # Establish connection to node and retrieve stats
+    is_master = false
+    stats = nil
+    node_conn = nil
+    begin
+      node_conn = Mongo::Connection.new(node_host, node_port)
+      stats = node_conn["admin"].command({"serverStatus" => 1})
+      is_master = node_conn["admin"].command({"isMaster" => 1})["ismaster"]
+    rescue
+      puts "Unable to connect to #{shard_name}/#{node_host}"
+      next
+    ensure
+      node_conn.close unless node_conn.nil?
     end
-  }
+    
+    # Prepare the prefix
+    prefix = options.prefix
+    unless options.exclude_hostname
+      hostname = host
+      options.host_trim.each do |trim|
+        hostname = host.sub(/#{trim}$/, "")
+      end
+      
+      if options.reverse
+        host_parts = hostname.split(".")
+        host_parts.reverse!
+        hostname = host_parts.join(".")
+      end
+      
+      options.host_prefix += "." unless options.host_prefix == "" || options.host_prefix =~ /[.]$/
+      
+      prefix += "." unless prefix == "" || prefix =~ /[.]$/
+      prefix += options.host_prefix unless options.host_prefix.nil? || options.host_prefix.length == 0
+      prefix += hostname
+      prefix += "." + options.host_suffix unless options.host_suffix.nil? || options.host_suffix.length == 0
+    end
+    
+    prefix += "." unless prefix == "" || prefix =~ /[.]$/ 
+
+    # Collect all of the metrics
+    metrics = {}
+    %w{bits resident virtual mapped mappedWithJournal}.each do |mem|
+      metrics[prefix + "mem.#{mem}"] = stats["mem"][mem]
+    end
+    
+    %w{totalTime lockTime ratio}.each do |global_lock|
+      metrics[prefix + "globalLock.#{global_lock}"] = stats["globalLock"][global_lock]
+    end
+    
+    %w{total readers writers}.each do |lock_detail|
+      metrics[prefix + "globalLock.currentQueue.#{lock_detail}"] = stats["globalLock"]["currentQueue"][lock_detail]
+      metrics[prefix + "globalLock.activeClients.#{lock_detail}"] = stats["globalLock"]["activeClients"][lock_detail]
+    end
+    
+    %w{flushes total_ms average_ms last_ms}.each do |flush|
+      metrics[prefix + "backgroundFlushing.#{flush}"] = stats["backgroundFlushing"][flush]
+    end
+    
+    %w{totalOpen clientCursors_size timedOut}.each do |cursor|
+      metrics[prefix + "cursors.#{cursor}"] = stats["cursors"][cursor]
+    end
+    
+    metrics[prefix + "connections.current"] = stats["connections"]["current"]
+    metrics[prefix + "connections.available"] = stats["connections"]["available"]
+
+    metrics[prefix + "extra.head_bytes"] = stats["extra_info"]["heap_usage_bytes"]
+    metrics[prefix + "extra.page_faults"] = stats["extra_info"]["page_faults"]
+
+    %w{insert query update delete getmore command}.each do |opcounter|
+      metrics[prefix + "opcounters.#{opcounter}"] = stats["opcounters"][opcounter]
+      metrics[prefix + "opcountersRepl.#{opcounter}"] = stats["opcountersRepl"][opcounter] unless is_master
+    end
+    
+    %w{regular warning msg user rollovers}.each do |assert_counter|
+      metrics[prefix + "asserts.#{assert_counter}"] = stats["asserts"][assert_counter]
+    end
+    
+    %w{bytesIn bytesOut numRequests}.each do |network|
+      metrics[prefix + "network.#{network}"] = stats["network"][network]
+    end
+    
+    %w{commits journaledMB writeToDataFilesMB compression commitsInWriteLock earlyCommits}.each do |dur|
+      metrics[prefix + "dur.#{dur}"] = stats["dur"][dur]
+    end
+    
+    %w{dt prepLogBuffer writeToJournal writeToDataFiles remapPrivateView}.each do |dur|
+      metrics[prefix + "dur.timeMs.#{dur}"] = stats["dur"]["timeMs"][dur]
+    end
+       
+    # Dump the metrics to the appropriate collector         
+    if options.collector == "graphite"
+      g.log(timestamp, metrics)
+    elsif options.collector == "statsd"
+      metrics.keys().each do |metric_key|
+        statsd.gauge(metric_key, metrics[metric_key])
+      end
+    else
+      metrics.keys.sort.each { |key| puts "#{key}: #{metrics[key]}" }
+    end
+  end
 end
 
-hostt='localhost'
-portt=27017
-@conn = Mongo::Connection.new(hostt,portt)
+
+##############################
+# Setup MongoDB connection
+@mongos_conn = Mongo::Connection.new(options.host, options.port)
+
+# Verify we're pointing at a mongos instance
 @isdbgrid  = {"isdbgrid" => 1}
-begin
-  @conn["admin"].command(@isdbgrid)["ok"] == 1
-  puts "mongos"
-  shards = Array.new
-  puts @conn["config"]["shards"].find().each { |shard|  shards << shard["host"] }
-  shards.each { |s|
-    Process.fork do
-    host,port =  s.split(/,|\//)[1].split(':')
-    treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
-    end
-  }
-rescue
-  puts "not mongos"
-  treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,hostt,portt)
+unless @mongos_conn["admin"].command(@isdbgrid)["ok"] == 1
+  puts "not mongos : Will monitor a simple replicaset"
+  @mongos_conn
+  treat_replicaset("replicaset", graphite_logger,host,port)
+  exit
 end
-Process.wait
+
+# Retrieve shard data
+shards = {}
+@mongos_conn["config"]["shards"].find().each { |shard|  shards[shard["_id"]] = shard["host"] }
+
+# Iterate over shards
+shards.keys.peach do |shard_name|
+  puts "Processing shard: #{shard_name}"
+  host,port =  shards[shard_name].split(/,|\//)[1].split(':')
+  treat_replicaset(shard_name, graphite_logger,host,port)
+end
