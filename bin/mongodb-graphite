@@ -1,92 +1,42 @@
 #!/usr/bin/env ruby
 
-require 'mongo'
-require 'graphite'
-require 'peach'
+require 'mongodb-graphite'
+require 'optparse'
+require 'daemons'
+require 'simple-graphite'
 
-graphite_server = ARGV[0]
+conf_dir = File.expand_path(ENV['MONGODB_GRAPHITE_DIR'] || '.')
 
-g = Graphite::Logger.new(graphite_server)
+config = MongodbGraphite::Configuration.new(conf_dir)
 
-to_ignore =[ "set", "repl", "time","qr|qw","ar|aw","conn"]
-to_convert = ["mapped","vsize","res","netIn","netOut"]
-output_average = ["mapped","vsize","res","locked","idxmiss"]
-output_sum = ["netIn", "netOut","insert","query","update","delete","getmore","command","flushes","faults"]
-prefix_common = "criteo.mongodb."
+daemon_options = {
+  :multiple => false,
+  :monitor => true,
+  :backtrace => true,
+  :log_dir => config[:log_dir],
+  :log_output => true,
+  :dir_mode => :normal,
+  :dir => config[:pid_dir]
+}
 
-def convert(s)
-  mul = case s[-1] 
-    when "b"
-      1
-    when "k"
-      1024
-    when "m"
-      1024 * 1024
-    when "g"
-      1024 * 1024 *1024
-    when "t"
-      1024 * 1024 * 1024 *1024
-    else 
-      raise "not convertible"
-    end
-  s[0..-1].to_f * mul
+g_host, g_port = config[:graphite].split(':')
+
+[:log_dir, :pid_dir].each do |d|
+  Dir.mkdir config[d] unless Dir.exist?(config[d])
 end
 
-
-
-
-
-
-
-
-
-
-def treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
-  #puts "shard : ", host,port
-  connHost = Mongo::Connection.new(host, port)
-  slaves = Array.new
-  connHost["admin"].command({ "isMaster" => 1 } )["hosts"].each { |slave| slaves << slave}
-  slaves.each { |slave|
-    Process.fork do
-    host, port = slave.split(':')
-    timestamp =  Time.now.getutc.to_i
-    result= `mongostat -n 60 --host #{host} --port #{port}   `.split("\n")
-    #timestamp +=  Time.now.getutc.to_i
-    #timestamp /= 2
-    headers, values = result[1], result[2..-1]
-    headers = headers.gsub(' %','').gsub('*','').gsub('idx miss','idxmiss').split
-    values= values.delete_if {|line| line.start_with?('insert')}.map { |line| line.gsub('*','').split}
-    values = values.transpose
-
-    prefix = prefix_common + host +"."+port+"."
-    headers = headers.map { |key| prefix+key }
-    metrics = Hash[headers.zip(values)]
-    to_ignore.each { |key| metrics.delete(prefix + key) }
-    to_convert.each { |key| metrics[prefix + key] = metrics[prefix+key].map {|val| convert(val)}}
-    output_average.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0.0) {|sum,el| sum+(el.to_i) } / metrics[prefix+key].size }
-    output_sum.each { |key| metrics[prefix+key] = metrics[prefix+key].inject(0) {|sum,el| sum+(el.to_i)} }
-    g.log(timestamp, metrics)
+Daemons.run_proc('mongodb-graphite', daemon_options) do
+  loop do
+    g = Graphite.new( :host => g_host, :port => g_port || '3333' )
+    @instance_list = MongodbGraphite::InstanceList.new(config)
+    @instance_list.each do |i|
+      begin
+        g.send_metrics(i.to_graphite)
+      rescue Exception => e
+        puts "Impossible to send metrics because of #{e}"
+        puts e.backtrace
+      end
     end
-  }
+    sleep (config[:interval] || 5)
+  end
 end
-
-hostt='localhost'
-portt=27017
-@conn = Mongo::Connection.new(hostt,portt)
-@isdbgrid  = {"isdbgrid" => 1}
-begin
-  @conn["admin"].command(@isdbgrid)["ok"] == 1
-  puts "mongos"
-  shards = Array.new
-  puts @conn["config"]["shards"].find().each { |shard|  shards << shard["host"] }
-  shards.each { |s|
-    Process.fork do
-    host,port =  s.split(/,|\//)[1].split(':')
-    treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,host,port)
-    end
-  }
-rescue
-  puts "not mongos"
-  treat_replicaset(g,to_ignore,to_convert, output_average, output_sum ,prefix_common,hostt,portt)
-end
-Process.wait
