@@ -10,7 +10,7 @@ log_dir: log
 pid_dir: pids
 graphite: graphite.mydomain:3333
 interval: 3
-instances_file: 'config/instances.rb
+instances_file: 'config/instances.rb'
 ```
 
 Then in config/instances.rb, you can set instances to monitor:
