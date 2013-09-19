@@ -6,8 +6,9 @@ require 'daemons'
 require 'simple-graphite'
 
 conf_dir = File.expand_path(ENV['MONGODB_GRAPHITE_DIR'] || '.')
+conf_file = File.expand_path(ENV['MONGODB_GRAPHITE_FILE'] || 'mongodb-graphite.yml')
 
-config = MongodbGraphite::Configuration.new(conf_dir)
+config = MongodbGraphite::Configuration.new(conf_dir, conf_file)
 
 daemon_options = {
   :multiple => false,

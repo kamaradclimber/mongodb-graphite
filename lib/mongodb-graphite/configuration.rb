@@ -2,11 +2,11 @@ require 'yaml'
 
 module MongodbGraphite
   class Configuration
-    def initialize(dir)
-      reload(dir)
+    def initialize(dir, yml)
+      reload(dir, yml)
     end
 
-    def reload(dir)
+    def reload(dir, yml)
       @config = {
         :log_dir => 'log',
         :pid_dir => 'pids',
@@ -16,7 +16,7 @@ module MongodbGraphite
         :instances_file => nil
       }
 
-      config_file_path = File.join(dir, 'config', 'mongodb-graphite.yml')
+      config_file_path = File.join(dir, 'config', yml)
       if File.exist? config_file_path
         config_file = YAML.load_file(config_file_path)
         @config.keys.each do |key|
