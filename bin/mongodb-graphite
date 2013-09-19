@@ -26,7 +26,7 @@ g_host, g_port = config[:graphite].split(':')
   Dir.mkdir config[d] unless Dir.exist?(config[d])
 end
 
-Daemons.run_proc('mongodb-graphite', daemon_options) do
+Daemons.run_proc(config[:daemon_name], daemon_options) do
   @instance_list = MongodbGraphite::InstanceList.new(config)
   loop do
     g = Graphite.new( :host => g_host, :port => g_port || '3333' )

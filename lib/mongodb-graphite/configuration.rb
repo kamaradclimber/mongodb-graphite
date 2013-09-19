@@ -13,7 +13,8 @@ module MongodbGraphite
         :graphite => 'localhost:3333',
         :mongodb => 'localhost:27017',
         :interval => 3, #in seconds
-        :instances_file => nil
+        :instances_file => nil,
+        :daemon_name => 'mongodb-graphite'
       }
 
       config_file_path = File.join(dir, 'config', yml)
