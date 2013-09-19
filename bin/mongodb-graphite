@@ -29,13 +29,16 @@ Daemons.run_proc('mongodb-graphite', daemon_options) do
   @instance_list = MongodbGraphite::InstanceList.new(config)
   loop do
     g = Graphite.new( :host => g_host, :port => g_port || '3333' )
-    @instance_list.each do |i|
-      begin
-        g.send_metrics(i.to_graphite)
-      rescue Exception => e
-        puts "Impossible to send metrics because of #{e}"
-        puts e.backtrace
+    begin
+      loop do
+        @instance_list.each do |i|
+          g.send_metrics(i.to_graphite)
+        end
+        sleep (config[:interval] || 5)
       end
+    rescue Exception => e
+      puts "Impossible to send metrics because of #{e}"
+      puts e.backtrace
     end
     sleep (config[:interval] || 5)
   end
