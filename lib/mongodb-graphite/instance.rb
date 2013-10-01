@@ -3,8 +3,8 @@ require 'simple-graphite'
 
 module Enumerable
   def merge_all
-    self.inject({}) { |h1, h2| 
-      h1.merge! h2 
+    self.inject({}) { |h1, h2|
+      h1.merge! h2
     }
   end
 end

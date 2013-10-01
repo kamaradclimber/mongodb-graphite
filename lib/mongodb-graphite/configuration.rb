@@ -8,13 +8,13 @@ module MongodbGraphite
 
     def reload(dir, yml)
       @config = {
-        :log_dir => 'log',
-        :pid_dir => 'pids',
-        :graphite => 'localhost:3333',
-        :mongodb => 'localhost:27017',
-        :interval => 3, #in seconds
-        :instances_file => nil,
-        :daemon_name => 'mongodb-graphite'
+        'log_dir' => 'log',
+        'pid_dir' => 'pids',
+        'graphite' => 'localhost:3333',
+        'mongodb' => 'localhost:27017',
+        'interval' => 3, #in seconds
+        'instances_file' => nil,
+        'daemon_name' => 'mongodb-graphite'
       }
 
       config_file_path = File.join(dir, 'config', yml)
@@ -28,7 +28,7 @@ module MongodbGraphite
 
       @config[:mongodb_graphite_dir] = dir
 
-      [:log_dir, :pid_dir, :instances_file].each do |k|
+      ['log_dir', 'pid_dir', 'instances_file'].each do |k|
         @config[k] = File.absolute_path(@config[k], dir)
       end
     end

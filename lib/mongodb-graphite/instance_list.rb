@@ -13,7 +13,7 @@ module MongodbGraphite
     def reload
       @instances = {}
 
-      file = @config[:instances_file]
+      file = @config['instances_file']
       if not file.nil?
         #puts "Reading instance file from #{file}"
         instance_eval(File.read(file),file)

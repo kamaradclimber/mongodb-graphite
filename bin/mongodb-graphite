@@ -6,7 +6,7 @@ require 'daemons'
 require 'simple-graphite'
 
 conf_dir = File.expand_path(ENV['MONGODB_GRAPHITE_DIR'] || '.')
-conf_file = File.expand_path(ENV['MONGODB_GRAPHITE_FILE'] || 'mongodb-graphite.yml')
+conf_file = ENV['MONGODB_GRAPHITE_FILE'] || 'mongodb-graphite.yml'
 
 config = MongodbGraphite::Configuration.new(conf_dir, conf_file)
 
@@ -14,19 +14,19 @@ daemon_options = {
   :multiple => false,
   :monitor => true,
   :backtrace => true,
-  :log_dir => config[:log_dir],
+  :log_dir => config['log_dir'],
   :log_output => true,
   :dir_mode => :normal,
-  :dir => config[:pid_dir]
+  :dir => config['pid_dir']
 }
 
-g_host, g_port = config[:graphite].split(':')
+g_host, g_port = config['graphite'].split(':')
 
-[:log_dir, :pid_dir].each do |d|
+['log_dir', 'pid_dir'].each do |d|
   Dir.mkdir config[d] unless Dir.exist?(config[d])
 end
 
-Daemons.run_proc(config[:daemon_name], daemon_options) do
+Daemons.run_proc(config['daemon_name'], daemon_options) do
   @instance_list = MongodbGraphite::InstanceList.new(config)
   loop do
     g = Graphite.new( :host => g_host, :port => g_port || '3333' )
@@ -41,6 +41,6 @@ Daemons.run_proc(config[:daemon_name], daemon_options) do
       puts "Impossible to send metrics because of #{e}"
       puts e.backtrace
     end
-    sleep (config[:interval] || 5)
+    sleep (config['interval'] || 5)
   end
 end
