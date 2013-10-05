@@ -30,7 +30,7 @@ instance 'mongoD' do
   port '27017'
   prefix_callback (lambda { |stats|
     process_type = stats['process']
-    'test.anothermongo.#{process_type}"
+    "test.anothermongo.#{process_type}"
   } )
 end
 ```
