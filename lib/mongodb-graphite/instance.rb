@@ -20,6 +20,7 @@ module MongodbGraphite
       @host = 'localhost'
       @fields_to_ignore = %w(host version process pid uptimeMillis localTime extra_info.note backgroundFlushing.last_finished repl.setName repl.hosts repl.arbiters repl.primary repl.me ok)
       @prefix_callback = nil
+      @replacements = { /locks\.\.\./ => 'locks.global.' }
     end
 
     def reload(options)
@@ -42,15 +43,22 @@ module MongodbGraphite
     end
 
     def to_graphite
-      @stats = to_hash 
+      @stats = to_hash
       with_prefix = Hash.new
       @stats.each do |k,v|
-        with_prefix[ [prefix, k].join('.')] = to_i(v)
+        key = format_key k
+        with_prefix[ [prefix, key].join('.')] = to_i(v)
       end
       with_prefix.reject { |k,v| ignored_fields.include? k }
     end
 
     private
+
+    def format_key(key)
+      @replacements.inject(key) do |modified_key, kvp|
+        modified_key.gsub(kvp[0], kvp[1])
+      end
+    end
 
     def prefix
       return @prefix_callback.call(@stats) unless @prefix_callback.nil?
