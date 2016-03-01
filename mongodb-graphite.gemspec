@@ -10,9 +10,10 @@ Gem::Specification.new do |s|
   s.homepage    = "https://github.com/kamaradclimber/mongodb-graphite"
   s.summary     = %q(Simple gem to provide graphite with mongodb server stats)
   s.description = %q(This gem retrieves detailed server stats from mongo instances, and pushes the information to graphite)
-  s.files         = `git ls-files`.split("\n")
-  s.test_files    = `git ls-files -- test/{functional,unit}/*`.split("\n")
-  s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
+  s.files       = `git ls-files`.split("\n")
+  s.test_files  = `git ls-files -- test/{functional,unit}/*`.split("\n")
+  s.executables = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
+  s.license     = 'MIT'
   #s.require_paths = ["lib"]
 
   s.add_dependency "mongo", "= 2.2.3"
