@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    mongodb-graphite (1.1.0)
+    mongodb-graphite (1.1.1)
       daemons
       mongo (>= 1.8.0)
       simple-graphite (>= 2.1.0)
@@ -9,10 +9,10 @@ PATH
 GEM
   remote: http://rubygems.org/
   specs:
-    bson (1.10.0)
-    daemons (1.1.9)
-    mongo (1.10.0)
-      bson (~> 1.10.0)
+    bson (4.0.3)
+    daemons (1.2.3)
+    mongo (2.2.3)
+      bson (~> 4.0)
     simple-graphite (2.1.0)
 
 PLATFORMS
@@ -20,3 +20,6 @@ PLATFORMS
 
 DEPENDENCIES
   mongodb-graphite!
+
+BUNDLED WITH
+   1.11.2

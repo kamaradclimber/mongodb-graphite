@@ -3,7 +3,7 @@ $:.push File.expand_path("../lib", __FILE__)
 
 Gem::Specification.new do |s|
   s.name        = "mongodb-graphite"
-  s.version     = '1.1.1'
+  s.version     = '1.1.2'
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Grégoire Seux"]
   s.email       = ["g.seux@criteo.com"]

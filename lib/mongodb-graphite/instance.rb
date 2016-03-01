@@ -82,11 +82,11 @@ module MongodbGraphite
     end
 
     def connection
-      @connection ||= Mongo::MongoClient.new(host, port, :slave_ok => true, :connect_timeout => 5, :pool_timeout => 5)
+      @connection ||= Mongo::Client.new([host + ':' + port], :database => 'test')
     end
 
     def stats
-      connection['test'].command({ 'serverStatus' => 1})
+      connection.database.command(:serverStatus => 1).first
     end
 
     def to_hash
@@ -98,7 +98,7 @@ module MongodbGraphite
     def json_descent(pre, json)
       json.map do |k,v|
         key = pre + [k]
-        if v.is_a? BSON::OrderedHash
+        if v.is_a? BSON::Document
           json_descent(key, v)
         else
           {key.join('.') => v }
