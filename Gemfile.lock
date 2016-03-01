@@ -1,10 +1,10 @@
 PATH
   remote: .
   specs:
-    mongodb-graphite (1.1.1)
-      daemons
-      mongo (>= 1.8.0)
-      simple-graphite (>= 2.1.0)
+    mongodb-graphite (1.1.2)
+      daemons (= 1.2.3)
+      mongo (= 2.2.3)
+      simple-graphite (= 2.1.0)
 
 GEM
   remote: http://rubygems.org/
