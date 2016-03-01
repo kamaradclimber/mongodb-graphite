@@ -3,7 +3,7 @@ Very simple gem to monitor a mongodb cluster and send data to a graphite server.
 Usage :
 
 You have to set an environment variable MONGODB_GRAPHITE_DIR (or it will use the config dir in the current directory).
-Then write a yml file to contain basic settings:
+Then write a '''mongo-graphite.yml''' file to contain basic settings:
 
 ```yaml
 log_dir: log
@@ -35,7 +35,7 @@ instance 'mongoD' do
 end
 ```
 
-Finally, you can use the gem as a service (start, status, stop)
+Finally, you can use the gem as a service (start, status, stop). use the gem without parameters for a list.
 
 ```
 mongodb-graphite start
